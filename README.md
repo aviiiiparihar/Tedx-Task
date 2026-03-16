@@ -108,6 +108,24 @@ firebase deploy --only functions
 npm install
 ```
 
+### 1.5 Configure environment variables
+
+Copy the example file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Required:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+
+Optional (for AI day report):
+
+- `VITE_OPENAI_API_KEY`
+
 ### 2. Start the development server
 
 ```bash
