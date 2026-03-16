@@ -181,6 +181,23 @@ npm run build
 firebase deploy --only hosting
 ```
 
+### 8. Deploy on Render
+
+This repository includes a `render.yaml` blueprint for static deployment.
+
+1. Push this repo to GitHub.
+2. In Render, click **New +** → **Blueprint**.
+3. Select this repository.
+4. Render reads `render.yaml` and creates a static web service.
+5. Set the environment variables in Render:
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_OPENAI_API_KEY` (optional)
+6. Trigger deploy.
+
+The blueprint already includes SPA routing rewrite (`/*` → `/index.html`) so routes like `/login`, `/feedback`, `/director`, and `/stage-manager` work after refresh.
+
 ---
 
 ## 7. What I Would Improve With More Time
