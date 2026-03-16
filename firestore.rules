@@ -1,0 +1,129 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getRole() {
+      return getUserData().role;
+    }
+
+    function isStageManager() {
+      return isAuthenticated() && getRole() == 'stage_manager';
+    }
+
+    function isEventDirector() {
+      return isAuthenticated() && getRole() == 'event_director';
+    }
+
+    function ownsSession(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data.stageManagerId
+             == request.auth.uid;
+    }
+
+    // Validates a counter-increment write from a feedback submission:
+    //   totalResponses += 1
+    //   ratingSum      += (1..5)   — one valid rating
+    //   oneStarCount   += 0 or 1  — only increments on 1-star
+    function isValidStatIncrement() {
+      let incoming = request.resource.data;
+      let existing = resource.data;
+      return incoming.totalResponses == existing.totalResponses + 1
+          && (incoming.ratingSum - existing.ratingSum) >= 1
+          && (incoming.ratingSum - existing.ratingSum) <= 5
+          && incoming.oneStarCount >= existing.oneStarCount
+          && incoming.oneStarCount <= existing.oneStarCount + 1;
+    }
+
+    // Validates a first-ever stat document (no existing doc):
+    //   totalResponses == 1, ratingSum in 1..5, oneStarCount in {0,1}
+    function isValidStatCreate() {
+      let d = request.resource.data;
+      return d.totalResponses == 1
+          && d.ratingSum >= 1
+          && d.ratingSum <= 5
+          && d.oneStarCount in [0, 1];
+    }
+
+    // ── users/{userId} ─────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read:   if isAuthenticated() && (request.auth.uid == userId || isEventDirector());
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // ── sessions/{sessionId} ──────────────────────────────────────────────────
+    match /sessions/{sessionId} {
+      allow read:  if isStageManager() && resource.data.stageManagerId == request.auth.uid;
+      allow read:  if isEventDirector();
+      allow write: if isEventDirector();
+    }
+
+    // ── feedback/{feedbackId} ─────────────────────────────────────────────────
+    match /feedback/{feedbackId} {
+      allow create: if true; // public — no auth required
+
+      allow read: if isStageManager() && ownsSession(resource.data.sessionId);
+      allow read: if isEventDirector();
+
+      allow update, delete: if false; // immutable
+    }
+
+    // ── session_stats/{sessionId} ─────────────────────────────────────────────
+    match /session_stats/{sessionId} {
+      allow read:  if isStageManager() && resource.data.stageManagerId == request.auth.uid;
+      allow read:  if isEventDirector();
+
+      // Event Director: full write (seed page, manual reset)
+      allow write: if isEventDirector();
+
+      // Anyone: strict increment-only update when a feedback is submitted
+      allow update: if isValidStatIncrement();
+
+      // Anyone: create stats doc for a brand-new session (no prior document)
+      allow create: if isValidStatCreate();
+    }
+
+    // ── event_stats/main ──────────────────────────────────────────────────────
+    match /event_stats/{docId} {
+      allow read:  if isEventDirector();
+
+      // Event Director: full write
+      allow write: if isEventDirector();
+
+      // Anyone: strict increment-only update
+      allow update: if isValidStatIncrement();
+    }
+
+    // ── daily_session_stats/{sessionId}/days/{date} ───────────────────────────
+    match /daily_session_stats/{sessionId}/days/{date} {
+      allow read:  if isStageManager() && ownsSession(sessionId);
+      allow read:  if isEventDirector();
+
+      // Event Director: full write (seed page)
+      allow write: if isEventDirector();
+
+      // Anyone: increment an existing day's counters
+      allow update: if
+        request.resource.data.totalResponses == resource.data.totalResponses + 1
+        && (request.resource.data.ratingSum - resource.data.ratingSum) >= 1
+        && (request.resource.data.ratingSum - resource.data.ratingSum) <= 5;
+
+      // Anyone: create a day document that doesn't exist yet
+      allow create: if
+        request.resource.data.totalResponses == 1
+        && request.resource.data.ratingSum >= 1
+        && request.resource.data.ratingSum <= 5;
+    }
+  }
+}
