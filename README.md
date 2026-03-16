@@ -2,6 +2,8 @@
 
 A production-quality real-time feedback and analytics platform for TEDx events, built with React, TypeScript, Firebase, and TailwindCSS.
 
+Live deployment: [https://tedx-task-ji6w.onrender.com](https://tedx-task-ji6w.onrender.com)
+
 ---
 
 ## 1. What the App Does
