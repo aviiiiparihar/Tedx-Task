@@ -54,6 +54,17 @@ service cloud.firestore {
           && d.oneStarCount in [0, 1];
     }
 
+    // Strict create validation for event_stats/main
+    // (first feedback write in an empty project)
+    function isValidEventStatCreate() {
+      let d = request.resource.data;
+      return d.totalResponses == 1
+          && d.ratingSum >= 1
+          && d.ratingSum <= 5
+          && d.oneStarCount in [0, 1]
+          && d.averageRating == d.ratingSum / d.totalResponses;
+    }
+
     // ── users/{userId} ─────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read:   if isAuthenticated() && (request.auth.uid == userId || isEventDirector());
@@ -103,6 +114,9 @@ service cloud.firestore {
 
       // Anyone: strict increment-only update
       allow update: if isValidStatIncrement();
+
+      // Anyone: allow first-time create with strict validation
+      allow create: if isValidEventStatCreate();
     }
 
     // ── daily_session_stats/{sessionId}/days/{date} ───────────────────────────
